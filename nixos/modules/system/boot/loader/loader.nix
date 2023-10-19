@@ -8,13 +8,22 @@ with lib;
     (mkRenamedOptionModule [ "boot" "loader" "gummiboot" "timeout" ] [ "boot" "loader" "timeout" ])
   ];
 
-    options = {
-        boot.loader.timeout =  mkOption {
-            default = 5;
-            type = types.nullOr types.int;
-            description = lib.mdDoc ''
-              Timeout (in seconds) until loader boots the default menu item. Use null if the loader menu should be displayed indefinitely.
-            '';
-        };
+  options = {
+    boot.loader.timeout = mkOption {
+      default = 5;
+      type = types.nullOr types.int;
+      description = lib.mdDoc ''
+        Timeout (in seconds) until loader boots the default menu item. Use null if the loader menu should be displayed indefinitely.
+      '';
     };
+
+    boot.loader.useSystemdStub = mkOption {
+      default = false;
+      type = types.bool;
+      description = lib.mdDoc ''
+        Use the systemd stub
+      '';
+    };
+
+  };
 }

@@ -7,6 +7,12 @@ let
 
   efi = config.boot.loader.efi;
 
+  systemdUkify = pkgs.systemdMinimal.override {
+    withEfi = true;
+    withBootloader = true;
+    withUkify = true;
+  };
+
   systemdBootBuilder = pkgs.substituteAll {
     src = ./systemd-boot-builder.py;
 
@@ -15,6 +21,8 @@ let
     inherit (pkgs) python3;
 
     systemd = config.systemd.package;
+
+    ukify = systemdUkify;
 
     nix = config.nix.package.out;
 
@@ -49,9 +57,10 @@ let
     '';
   };
 
-  checkedSystemdBootBuilder = pkgs.runCommand "systemd-boot" {
-    nativeBuildInputs = [ pkgs.mypy ];
-  } ''
+  checkedSystemdBootBuilder = pkgs.runCommand "systemd-boot"
+    {
+      nativeBuildInputs = [ pkgs.mypy ];
+    } ''
     install -m755 ${systemdBootBuilder} $out
     mypy \
       --no-implicit-optional \
@@ -65,10 +74,12 @@ let
     ${checkedSystemdBootBuilder} "$@"
     ${cfg.extraInstallCommands}
   '';
-in {
+in
+{
 
   imports =
-    [ (mkRenamedOptionModule [ "boot" "loader" "gummiboot" "enable" ] [ "boot" "loader" "systemd-boot" "enable" ])
+    [
+      (mkRenamedOptionModule [ "boot" "loader" "gummiboot" "enable" ] [ "boot" "loader" "systemd-boot" "enable" ])
     ];
 
   options.boot.loader.systemd-boot = {
@@ -186,7 +197,7 @@ in {
 
     extraEntries = mkOption {
       type = types.attrsOf types.lines;
-      default = {};
+      default = { };
       example = literalExpression ''
         { "memtest86.conf" = '''
           title Memtest86+
@@ -207,7 +218,7 @@ in {
 
     extraFiles = mkOption {
       type = types.attrsOf types.path;
-      default = {};
+      default = { };
       example = literalExpression ''
         { "efi/memtest86/memtest.efi" = "''${pkgs.memtest86plus}/memtest.efi"; }
       '';
@@ -242,17 +253,20 @@ in {
         assertion = (config.boot.kernelPackages.kernel.features or { efiBootStub = true; }) ? efiBootStub;
         message = "This kernel does not support the EFI boot stub";
       }
-    ] ++ concatMap (filename: [
-      {
-        assertion = !(hasInfix "/" filename);
-        message = "boot.loader.systemd-boot.extraEntries.${lib.strings.escapeNixIdentifier filename} is invalid: entries within folders are not supported";
-      }
-      {
-        assertion = hasSuffix ".conf" filename;
-        message = "boot.loader.systemd-boot.extraEntries.${lib.strings.escapeNixIdentifier filename} is invalid: entries must have a .conf file extension";
-      }
-    ]) (builtins.attrNames cfg.extraEntries)
-      ++ concatMap (filename: [
+    ] ++ concatMap
+      (filename: [
+        {
+          assertion = !(hasInfix "/" filename);
+          message = "boot.loader.systemd-boot.extraEntries.${lib.strings.escapeNixIdentifier filename} is invalid: entries within folders are not supported";
+        }
+        {
+          assertion = hasSuffix ".conf" filename;
+          message = "boot.loader.systemd-boot.extraEntries.${lib.strings.escapeNixIdentifier filename} is invalid: entries must have a .conf file extension";
+        }
+      ])
+      (builtins.attrNames cfg.extraEntries)
+    ++ concatMap
+      (filename: [
         {
           assertion = !(hasPrefix "/" filename);
           message = "boot.loader.systemd-boot.extraFiles.${lib.strings.escapeNixIdentifier filename} is invalid: paths must not begin with a slash";
@@ -265,9 +279,14 @@ in {
           assertion = !(hasInfix "nixos/.extra-files" (toLower filename));
           message = "boot.loader.systemd-boot.extraFiles.${lib.strings.escapeNixIdentifier filename} is invalid: files cannot be placed in the nixos/.extra-files directory";
         }
-      ]) (builtins.attrNames cfg.extraFiles);
+      ])
+      (builtins.attrNames cfg.extraFiles);
 
     boot.loader.grub.enable = mkDefault false;
+
+    boot.bootspec.extensions = mkIf config.boot.loader.useSystemdStub {
+      systemdStub = true;
+    };
 
     boot.loader.supportsInitrdSecrets = true;
 
