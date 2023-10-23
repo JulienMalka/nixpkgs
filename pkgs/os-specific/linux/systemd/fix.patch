@@ -1,0 +1,13 @@
+diff --git a/src/shared/creds-util.c b/src/shared/creds-util.c
+index 573900f870..cd3df67ace 100644
+--- a/src/shared/creds-util.c
++++ b/src/shared/creds-util.c
+@@ -170,7 +170,7 @@ int read_credential_with_decryption(const char *name, void **ret, size_t *ret_si
+                         UINT64_MAX, SIZE_MAX,
+                         READ_FULL_FILE_SECURE,
+                         NULL,
+-                        (char**) data, &sz);
++                        (char**) &data, &sz);
+         if (r == -ENOENT)
+                 goto not_found;
+         if (r < 0)

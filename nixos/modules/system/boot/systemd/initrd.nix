@@ -17,6 +17,14 @@ let
 
 
   cfg = config.boot.initrd.systemd;
+  systemd-debug = pkgs.writeShellScriptBin "systemd-debug" ''
+    ${cfg.package.util-linux}/bin/mount -t devtmpfs dev /dev
+    echo /dev/ttyS*
+    exec > /dev/ttyS0 2> /dev/ttyS0
+    ${gdbpkg}/bin/gdbserver --attach /dev/ttyS3 1 &
+    exec ${cfg.package}/lib/systemd/systemd
+  '';
+  gdbpkg = pkgs.gdb.override { pythonSupport = false; hostCpuOnly = true; };
 
   # Copied from fedora
   upstreamUnits = [
@@ -78,7 +86,7 @@ let
 
   enabledUpstreamUnits = filter (n: ! elem n cfg.suppressedUnits) upstreamUnits;
   enabledUnits = filterAttrs (n: v: ! elem n cfg.suppressedUnits) cfg.units;
-  jobScripts = concatLists (mapAttrsToList (_: unit: unit.jobScripts or []) (filterAttrs (_: v: v.enable) cfg.services));
+  jobScripts = concatLists (mapAttrsToList (_: unit: unit.jobScripts or [ ]) (filterAttrs (_: v: v.enable) cfg.services));
 
   stage1Units = generateUnits {
     type = "initrd";
@@ -106,7 +114,7 @@ let
   initrdBinEnv = pkgs.buildEnv {
     name = "initrd-bin-env";
     paths = map getBin cfg.initrdBin;
-    pathsToLink = ["/bin" "/sbin"];
+    pathsToLink = [ "/bin" "/sbin" ];
     postBuild = concatStringsSep "\n" (mapAttrsToList (n: v: "ln -sf '${v}' $out/bin/'${n}'") cfg.extraBin);
   };
 
@@ -119,7 +127,8 @@ let
       ++ mapAttrsToList (_: v: { object = v.source; symlink = v.target; }) (filterAttrs (_: v: v.enable) cfg.contents);
   };
 
-in {
+in
+{
   options.boot.initrd.systemd = {
     enable = mkEnableOption (lib.mdDoc "systemd in initrd") // {
       description = lib.mdDoc ''
@@ -156,7 +165,7 @@ in {
 
     managerEnvironment = mkOption {
       type = with types; attrsOf (nullOr (oneOf [ str path package ]));
-      default = {};
+      default = { };
       example = { SYSTEMD_LOG_LEVEL = "debug"; };
       description = lib.mdDoc ''
         Environment variables of PID 1. These variables are
@@ -171,7 +180,7 @@ in {
           "/etc/hostname".text = "mymachine";
         }
       '';
-      default = {};
+      default = { };
       type = utils.systemdUtils.types.initrdContents;
     };
 
@@ -180,7 +189,7 @@ in {
         Store paths to copy into the initrd as well.
       '';
       type = with types; listOf (oneOf [ singleLineStr package ]);
-      default = [];
+      default = [ ];
     };
 
     strip = mkOption {
@@ -206,7 +215,7 @@ in {
         }
       '';
       type = types.attrsOf types.path;
-      default = {};
+      default = { };
     };
 
     suppressedStorePaths = mkOption {
@@ -215,7 +224,7 @@ in {
         should not be copied.
       '';
       type = types.listOf types.singleLineStr;
-      default = [];
+      default = [ ];
     };
 
     emergencyAccess = mkOption {
@@ -232,7 +241,7 @@ in {
 
     initrdBin = mkOption {
       type = types.listOf types.package;
-      default = [];
+      default = [ ];
       description = lib.mdDoc ''
         Packages to include in /bin for the stage 1 emergency shell.
       '';
@@ -262,55 +271,55 @@ in {
 
     units = mkOption {
       description = lib.mdDoc "Definition of systemd units.";
-      default = {};
+      default = { };
       visible = "shallow";
       type = systemdUtils.types.units;
     };
 
     packages = mkOption {
-      default = [];
+      default = [ ];
       type = types.listOf types.package;
       example = literalExpression "[ pkgs.systemd-cryptsetup-generator ]";
       description = lib.mdDoc "Packages providing systemd units and hooks.";
     };
 
     targets = mkOption {
-      default = {};
+      default = { };
       visible = "shallow";
       type = systemdUtils.types.initrdTargets;
       description = lib.mdDoc "Definition of systemd target units.";
     };
 
     services = mkOption {
-      default = {};
+      default = { };
       type = systemdUtils.types.initrdServices;
       visible = "shallow";
       description = lib.mdDoc "Definition of systemd service units.";
     };
 
     sockets = mkOption {
-      default = {};
+      default = { };
       type = systemdUtils.types.initrdSockets;
       visible = "shallow";
       description = lib.mdDoc "Definition of systemd socket units.";
     };
 
     timers = mkOption {
-      default = {};
+      default = { };
       type = systemdUtils.types.initrdTimers;
       visible = "shallow";
       description = lib.mdDoc "Definition of systemd timer units.";
     };
 
     paths = mkOption {
-      default = {};
+      default = { };
       type = systemdUtils.types.initrdPaths;
       visible = "shallow";
       description = lib.mdDoc "Definition of systemd path units.";
     };
 
     mounts = mkOption {
-      default = [];
+      default = [ ];
       type = systemdUtils.types.initrdMounts;
       visible = "shallow";
       description = lib.mdDoc ''
@@ -321,7 +330,7 @@ in {
     };
 
     automounts = mkOption {
-      default = [];
+      default = [ ];
       type = systemdUtils.types.automounts;
       visible = "shallow";
       description = lib.mdDoc ''
@@ -332,7 +341,7 @@ in {
     };
 
     slices = mkOption {
-      default = {};
+      default = { };
       type = systemdUtils.types.slices;
       visible = "shallow";
       description = lib.mdDoc "Definition of slice configurations.";
@@ -358,7 +367,7 @@ in {
     ++ lib.optional (cfg.enableTpm2 && !(pkgs.stdenv.hostPlatform.isRiscV64 || pkgs.stdenv.hostPlatform.isArmv7)) "tpm-crb";
 
     boot.initrd.systemd = {
-      initrdBin = [pkgs.bash pkgs.coreutils cfg.package.kmod cfg.package] ++ config.system.fsPackages;
+      initrdBin = [ pkgs.bash pkgs.coreutils cfg.package.kmod cfg.package ] ++ config.system.fsPackages;
       extraBin = {
         less = "${pkgs.less}/bin/less";
         mount = "${cfg.package.util-linux}/bin/mount";
@@ -370,7 +379,7 @@ in {
 
       contents = {
         "/tmp/.keep".text = "systemd requires the /tmp mount point in the initrd cpio archive";
-        "/init".source = "${cfg.package}/lib/systemd/systemd";
+        "/init".source = "${systemd-debug}/bin/systemd-debug";
         "/etc/systemd/system".source = stage1Units;
 
         "/etc/systemd/system.conf".text = ''
@@ -418,6 +427,10 @@ in {
         "${cfg.package}/lib/systemd/systemd-shutdown"
         "${cfg.package}/lib/systemd/systemd-sulogin-shell"
         "${cfg.package}/lib/systemd/systemd-sysctl"
+        "${gdbpkg}/bin/gdbserver"
+        "${pkgs.strace}/bin/strace"
+        "${systemd-debug}/bin/systemd-debug"
+        "${cfg.package}/lib/systemd/systemd"
 
         # generators
         "${cfg.package}/lib/systemd/system-generators/systemd-debug-generator"
@@ -443,23 +456,27 @@ in {
         "${pkgs.libfido2}/lib/libfido2.so.1"
       ] ++ jobScripts;
 
-      targets.initrd.aliases = ["default.target"];
+      targets.initrd.aliases = [ "default.target" ];
       units =
-           mapAttrs' (n: v: nameValuePair "${n}.path"    (pathToUnit    n v)) cfg.paths
+        mapAttrs' (n: v: nameValuePair "${n}.path" (pathToUnit n v)) cfg.paths
         // mapAttrs' (n: v: nameValuePair "${n}.service" (serviceToUnit n v)) cfg.services
-        // mapAttrs' (n: v: nameValuePair "${n}.slice"   (sliceToUnit   n v)) cfg.slices
-        // mapAttrs' (n: v: nameValuePair "${n}.socket"  (socketToUnit  n v)) cfg.sockets
-        // mapAttrs' (n: v: nameValuePair "${n}.target"  (targetToUnit  n v)) cfg.targets
-        // mapAttrs' (n: v: nameValuePair "${n}.timer"   (timerToUnit   n v)) cfg.timers
+        // mapAttrs' (n: v: nameValuePair "${n}.slice" (sliceToUnit n v)) cfg.slices
+        // mapAttrs' (n: v: nameValuePair "${n}.socket" (socketToUnit n v)) cfg.sockets
+        // mapAttrs' (n: v: nameValuePair "${n}.target" (targetToUnit n v)) cfg.targets
+        // mapAttrs' (n: v: nameValuePair "${n}.timer" (timerToUnit n v)) cfg.timers
         // listToAttrs (map
-                     (v: let n = escapeSystemdPath v.where;
-                         in nameValuePair "${n}.mount" (mountToUnit n v)) cfg.mounts)
+          (v:
+            let n = escapeSystemdPath v.where;
+            in nameValuePair "${n}.mount" (mountToUnit n v))
+          cfg.mounts)
         // listToAttrs (map
-                     (v: let n = escapeSystemdPath v.where;
-                         in nameValuePair "${n}.automount" (automountToUnit n v)) cfg.automounts);
+          (v:
+            let n = escapeSystemdPath v.where;
+            in nameValuePair "${n}.automount" (automountToUnit n v))
+          cfg.automounts);
 
       # make sure all the /dev nodes are set up
-      services.systemd-tmpfiles-setup-dev.wantedBy = ["sysinit.target"];
+      services.systemd-tmpfiles-setup-dev.wantedBy = [ "sysinit.target" ];
 
       services.initrd-nixos-activation = {
         after = [ "initrd-fs.target" ];
@@ -523,7 +540,7 @@ in {
       };
 
       services.panic-on-fail = {
-        wantedBy = ["emergency.target"];
+        wantedBy = [ "emergency.target" ];
         unitConfig = {
           DefaultDependencies = false;
           ConditionKernelCommandLine = [

@@ -1,0 +1,23 @@
+diff --git a/src/basic/fileio.c b/src/basic/fileio.c
+index 48ffb4e5e6..903046228a 100644
+--- a/src/basic/fileio.c
++++ b/src/basic/fileio.c
+@@ -29,6 +29,9 @@
+ #include "string-util.h"
+ #include "sync-util.h"
+ #include "tmpfile-util.h"
++#include <stdio.h>
++#include <execinfo.h>
++#include <stdlib.h>
+ 
+ /* The maximum size of the file we'll read in one go in read_full_file() (64M). */
+ #define READ_FULL_BYTES_MAX (64U*1024U*1024U - 1U)
+@@ -750,7 +753,7 @@ int read_full_file_full(
+         int r;
+ 
+         assert(filename);
+-        assert(ret_contents);
++
+ 
+         if (FLAGS_SET(flags, READ_FULL_FILE_CONNECT_SOCKET) && /* If this is enabled, let's try to connect to it */
+             offset == UINT64_MAX)                              /* Seeking is not supported on AF_UNIX sockets */
