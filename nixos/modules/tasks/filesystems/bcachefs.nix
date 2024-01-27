@@ -57,63 +57,52 @@ let
   # bcachefs does not support mounting devices with colons in the path, ergo we don't (see #49671)
   firstDevice = fs: lib.head (lib.splitString ":" fs.device);
 
-  openCommand = name: fs: if config.boot.initrd.clevis.enable && (lib.hasAttr (firstDevice fs) config.boot.initrd.clevis.devices) then ''
-    if clevis decrypt < /etc/clevis/${firstDevice fs}.jwe | bcachefs unlock ${firstDevice fs}
-    then
-      printf "unlocked ${name} using clevis\n"
-    else
-      printf "falling back to interactive unlocking...\n"
+  openCommand = name: fs:
+    if config.boot.initrd.clevis.enable && (lib.hasAttr (firstDevice fs) config.boot.initrd.clevis.devices) then ''
+      if clevis decrypt < /etc/clevis/${firstDevice fs}.jwe | bcachefs unlock ${firstDevice fs}
+      then
+        printf "unlocked ${name} using clevis\n"
+      else
+        printf "falling back to interactive unlocking...\n"
+        tryUnlock ${name} ${firstDevice fs}
+      fi
+    '' else ''
       tryUnlock ${name} ${firstDevice fs}
-    fi
-  '' else ''
-    tryUnlock ${name} ${firstDevice fs}
-  '';
+    '';
 
-  mkUnits = prefix: name: fs: let
-    mountUnit = "${utils.escapeSystemdPath (prefix + (lib.removeSuffix "/" fs.mountPoint))}.mount";
-    device = firstDevice fs;
-    deviceUnit = "${utils.escapeSystemdPath device}.device";
-  in {
-    name = "unlock-bcachefs-${utils.escapeSystemdPath fs.mountPoint}";
-    value = {
-      description = "Unlock bcachefs for ${fs.mountPoint}";
-      requiredBy = [ mountUnit ];
-      after = [ deviceUnit ];
-      before = [ mountUnit "shutdown.target" ];
-      bindsTo = [ deviceUnit ];
-      conflicts = [ "shutdown.target" ];
-      unitConfig.DefaultDependencies = false;
-      serviceConfig = {
-        Type = "oneshot";
-        ExecCondition = "${pkgs.bcachefs-tools}/bin/bcachefs unlock -c \"${device}\"";
-        Restart = "on-failure";
-        RestartMode = "direct";
-        # Ideally, this service would lock the key on stop.
-        # As is, RemainAfterExit doesn't accomplish anything.
-        RemainAfterExit = true;
+  mkUnits = prefix: name: fs:
+    let
+      mountUnit = "${utils.escapeSystemdPath (prefix + (lib.removeSuffix "/" fs.mountPoint))}.mount";
+      device = firstDevice fs;
+      deviceUnit = "${utils.escapeSystemdPath device}.device";
+    in
+    {
+      name = "unlock-bcachefs-${utils.escapeSystemdPath fs.mountPoint}";
+      value = {
+        description = "Unlock bcachefs for ${fs.mountPoint}";
+        requiredBy = [ mountUnit ];
+        after = [ deviceUnit ];
+        before = [ mountUnit "shutdown.target" ];
+        bindsTo = [ deviceUnit ];
+        conflicts = [ "shutdown.target" ];
+        unitConfig.DefaultDependencies = false;
+        serviceConfig = {
+          Type = "oneshot";
+          ExecCondition = "${pkgs.bcachefs-tools}/bin/bcachefs unlock -c \"${device}\"";
+          Restart = "on-failure";
+          RestartMode = "direct";
+          # Ideally, this service would lock the key on stop.
+          # As is, RemainAfterExit doesn't accomplish anything.
+          RemainAfterExit = true;
+        };
+        script = ''
+          ${config.boot.initrd.systemd.package}/bin/systemd-ask-password --timeout=0 "enter passphrase for ${name}" | exec ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${device}"
+        '';
       };
-      script = ''
-        ${config.boot.initrd.systemd.package}/bin/systemd-ask-password --timeout=0 "enter passphrase for ${name}" | exec ${pkgs.bcachefs-tools}/bin/bcachefs unlock "${device}"
-      '';
     };
-  };
 
   assertions = [
-    {
-      assertion = let
-        kernel = config.boot.kernelPackages.kernel;
-      in (
-        kernel.kernelAtLeast "6.7" || (
-          lib.elem (kernel.structuredExtraConfig.BCACHEFS_FS or null) [
-            lib.kernel.module
-            lib.kernel.yes
-            (lib.kernel.option lib.kernel.yes)
-          ]
-        )
-      );
 
-      message = "Linux 6.7-rc1 at minimum or a custom linux kernel with bcachefs support is required";
-    }
   ];
 in
 
@@ -133,7 +122,7 @@ in
       };
     }
 
-    (lib.mkIf ((lib.elem "bcachefs" config.boot.initrd.supportedFilesystems) || (bootFs != {})) {
+    (lib.mkIf ((lib.elem "bcachefs" config.boot.initrd.supportedFilesystems) || (bootFs != { })) {
       inherit assertions;
       # chacha20 and poly1305 are required only for decryption attempts
       boot.initrd.availableKernelModules = [ "bcachefs" "sha256" "chacha20" "poly1305" ];
