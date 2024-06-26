@@ -10632,6 +10632,8 @@ with pkgs;
   lziprecover = callPackage ../tools/compression/lziprecover { };
 
   xz = callPackage ../tools/compression/xz { };
+  xz-after-bootstrap =  callPackage ../tools/compression/xz/after-bootstrap.nix { };
+  xz-compare =  callPackage ../tools/compression/xz/compare.nix { };
 
   lz4 = callPackage ../tools/compression/lz4 { };
 
